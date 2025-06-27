@@ -106,16 +106,17 @@ if "download_triggered" not in st.session_state:
 
 st.title("🏴‍☠️ YouTube Bulk Downloader")
 
-# Dynamic URL input boxes
-new_url_list = []
-for i, url in enumerate(st.session_state.url_list):
-    new_url = st.text_input(f"YouTube URL #{i+1}", value=url, key=f"url_{i}")
-    new_url_list.append(new_url)
+# Multi-URL text area
+if "multi_url_text" not in st.session_state:
+    st.session_state.multi_url_text = ""
 
-if new_url_list[-1].strip():
-    new_url_list.append("")
-
-st.session_state.url_list = new_url_list
+multi_url_text = st.text_area(
+    "Enter YouTube URLs (one per line):",
+    value=st.session_state.multi_url_text,
+    key="multi_url_text_area",
+    height=150
+)
+st.session_state.multi_url_text = multi_url_text
 
 # Folder input
 folder_path = st.text_input(
@@ -134,11 +135,12 @@ progress_bar = st.progress(0)  # progress bar at the top of logs
 logs = []
 log_placeholder = st.empty()
 
-
 if st.session_state.download_triggered:
     st.session_state.download_triggered = False  # Reset trigger
 
-    valid_urls = [u.strip() for u in st.session_state.url_list if u.strip()]
+    # Split URLs by newlines or commas, strip whitespace, and filter out empty
+    raw_urls = st.session_state.multi_url_text.split('\n')
+    valid_urls = [u.strip() for u in raw_urls if u.strip()]
     if not valid_urls:
         st.error("⚠️ Please enter at least one valid YouTube URL.")
         progress_bar.progress(0)  # reset progress
@@ -155,6 +157,8 @@ if st.session_state.download_triggered:
         progress_bar.progress(100)
         st.balloons()
         st.success("🏁 All downloads complete!")
+    # Clear the text area after download
+    st.session_state.multi_url_text = ""
 
 # Show logs at the very bottom
 log_placeholder.text("\n".join(logs[-20:]))
