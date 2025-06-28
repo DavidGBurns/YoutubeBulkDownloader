@@ -12,13 +12,6 @@ from datetime import datetime
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
 
-# Logger setup — define BEFORE log_func
-logs = []
-log_placeholder = st.empty()
-
-def log_func(message):
-    logs.append(message)
-    log_placeholder.text("\n".join(logs[-20:]))
 
 # Convert to mp4
 def convert_to_mp4(input_path: Path, log_func):
@@ -133,8 +126,22 @@ with col3:
 
 # ==== PROCESSING & LOGS AT THE BOTTOM ====
 
-
 progress_bar = st.progress(0)  # progress bar at the top of logs
+
+# Logger setup — define BEFORE log_func
+logs = []
+log_box_placeholder = st.empty()
+
+def log_func(message):
+    logs.append(message)
+    log_box_placeholder.markdown(
+        f"""
+        <div style='height: 200px; overflow-y: auto; background: #18191A; color: #fafafa; padding: 10px; border-radius: 6px; font-size: 14px; margin-top: 1em;'>
+        {'<br>'.join(logs[-100:])}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 def zip_converted_files(folder: Path) -> bytes:
     zip_buffer = io.BytesIO()
@@ -199,6 +206,3 @@ if st.session_state.download_triggered:
                     st.error(f"❌ Error: {e}")
     # Clear the text area after download or cancel
     st.session_state.multi_url_text = ""
-
-# Show logs at the very bottom
-log_placeholder.text("\n".join(logs[-20:]))
