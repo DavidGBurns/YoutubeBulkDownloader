@@ -5,11 +5,16 @@ import yt_dlp
 import pyttsx3
 import random
 import os
+import io
+import zipfile
+from datetime import datetime
 
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
 
-
+# Logger setup — define BEFORE log_func
+logs = []
+log_placeholder = st.empty()
 
 def log_func(message):
     logs.append(message)
@@ -98,7 +103,6 @@ def text_to_speech(text, log_func):
 # SESSION INIT
 if "url_list" not in st.session_state:
     st.session_state.url_list = [""]
-
 if "download_triggered" not in st.session_state:
     st.session_state.download_triggered = False
 
@@ -111,53 +115,89 @@ if "multi_url_text" not in st.session_state:
     st.session_state.multi_url_text = ""
 
 multi_url_text = st.text_area(
-    "Enter YouTube URLs (one per line):",
+    "Enter YouTube URLs (one per line or separated by commas):",
     value=st.session_state.multi_url_text,
     key="multi_url_text_area",
     height=150
 )
 st.session_state.multi_url_text = multi_url_text
 
-# Folder input
-folder_path = st.text_input(
-    "📂 Folder to save downloads:",
-    value=str(st.session_state.get("folder", Path.home() / "Downloads/yt_pirate_treasure"))
-)
-st.session_state.folder = folder_path
-
-# Start Download button
-if st.button("🚀 Start Download"):
-    st.session_state.download_triggered = True
+# Start Download and Cancel buttons
+_, col2, col3, _ = st.columns([4, 3, 2, 4])
+with col2:
+    if st.button("⬇️ Download", help="Start downloading and converting all listed YouTube URLs"):
+        st.session_state.download_triggered = True
+with col3:
+    if st.button("❌ Cancel", help="Cancel the current download/conversion process"):
+        st.session_state.cancel_download = True
 
 # ==== PROCESSING & LOGS AT THE BOTTOM ====
+
+
 progress_bar = st.progress(0)  # progress bar at the top of logs
-# Logger setup — define BEFORE log_func
-logs = []
-log_placeholder = st.empty()
+
+def zip_converted_files(folder: Path) -> bytes:
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file in folder.glob("*.*"):
+            if file.suffix.lower() in [".mp3", ".mp4"]:
+                zipf.write(file, arcname=file.name)
+    zip_buffer.seek(0)
+    return zip_buffer.read()
+
+if "cancel_download" not in st.session_state:
+    st.session_state.cancel_download = False
 
 if st.session_state.download_triggered:
     st.session_state.download_triggered = False  # Reset trigger
+    st.session_state.cancel_download = False  # Reset cancel
 
     # Split URLs by newlines or commas, strip whitespace, and filter out empty
     raw_urls = st.session_state.multi_url_text.split('\n')
     valid_urls = [u.strip() for u in raw_urls if u.strip()]
+    
     if not valid_urls:
         st.error("⚠️ Please enter at least one valid YouTube URL.")
         progress_bar.progress(0)  # reset progress
     else:
-        output_dir = Path(folder_path)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            output_dir = Path(tmpdirname)
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        def update_progress(percent):
-            progress_bar.progress(percent)
+            def update_progress(percent):
+                progress_bar.progress(percent)
+                if st.session_state.cancel_download:
+                    raise Exception("Download cancelled by user.")
 
-        download_and_process(valid_urls, output_dir, log_func, update_progress)
-        pirate_msg = save_pirate_message(output_dir, log_func)
-        text_to_speech(pirate_msg, log_func)
-        progress_bar.progress(100)
-        st.balloons()
-        st.success("🏁 All downloads complete!")
-    # Clear the text area after download
+            try:
+                download_and_process(valid_urls, output_dir, log_func, update_progress)
+                if st.session_state.cancel_download:
+                    st.warning("⛔ Download cancelled.")
+                else:
+                    pirate_msg = save_pirate_message(output_dir, log_func)
+                    text_to_speech(pirate_msg, log_func)
+                    progress_bar.progress(100)
+                    st.balloons()
+                    st.success("🏁 All downloads complete!")
+
+                    # Zip all converted files
+                    zip_bytes = zip_converted_files(output_dir)
+                    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    zip_name = f"YT_Booty_{dt_str}.zip"
+                    st.write("## Download your booty:")
+                    st.download_button(
+                        label=f"💾 Download {zip_name}",
+                        data=zip_bytes,
+                        file_name=zip_name,
+                        mime="application/zip"
+                    )
+            except Exception as e:
+                if str(e) == "Download cancelled by user.":
+                    st.warning("⛔ Download cancelled by user.")
+                else:
+                    st.error(f"❌ Error: {e}")
+    # Clear the text area after download or cancel
     st.session_state.multi_url_text = ""
 
 # Show logs at the very bottom
