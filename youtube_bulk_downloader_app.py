@@ -9,20 +9,37 @@ import io
 import zipfile
 from datetime import datetime
 import moviepy as mp
+from moviepy import VideoFileClip
 
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
 
+# Make all Streamlit buttons wide enough to keep text on one line
+st.markdown(
+    """
+    <style>
+    /* Try to target all buttons, including inside columns */
+    button[kind="primary"], button[kind="secondary"], div.stButton > button {
+        min-width: 6vw !important;
+        max-width: 100vw !important;
+        white-space: nowrap !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# Convert to mp4
+
+# Convert to mp4 using moviepy
 def convert_to_mp4(input_path: Path, log_func):
     output_path = input_path.with_suffix(".converted.mp4")
-    log_func(f"🔄 Converting {input_path.name} to MP4...")
+    log_func(f"🔄 Converting {input_path.name} to MP4 with moviepy...")
     try:
-        subprocess.run([
-            'ffmpeg', '-i', str(input_path), '-c:v', 'libx264', '-c:a', 'aac',
-            '-y', str(output_path)
-        ], check=True)
+        clip = VideoFileClip(str(input_path))
+        clip.write_videofile(str(output_path), codec="libx264", audio_codec="aac", logger=None)
+        clip.close()
         output_path.replace(input_path)
         log_func(f"✅ Converted: {input_path.name}")
     except Exception as e:
@@ -33,10 +50,13 @@ def convert_to_mp3(input_path: Path, log_func):
     output_path = input_path.with_suffix(".mp3")
     log_func(f"🎧 Extracting MP3 from {input_path.name}...")
     try:
-        subprocess.run([
-            'ffmpeg', '-i', str(input_path), '-q:a', '0', '-map', 'a', '-y', str(output_path)
-        ], check=True)
-        log_func(f"✅ MP3 created: {output_path.name}")
+        clip = VideoFileClip(str(input_path))
+        if clip.audio is not None:
+            clip.audio.write_audiofile(str(output_path), logger=None)
+            log_func(f"✅ MP3 created: {output_path.name}")
+        else:
+            log_func(f"❌ No audio track found in {input_path.name}")
+        clip.close()
     except Exception as e:
         log_func(f"❌ MP3 conversion failed: {e}")
 
@@ -111,26 +131,28 @@ if "multi_url_text" not in st.session_state:
 
 
 
-# Start Download and Cancel buttons
-_, col2, col3, _ = st.columns([4, 3, 2, 4])
-with col2:
-    if st.button("⬇️ Download", help="Start downloading and converting all listed YouTube URLs"):
-        st.session_state.download_triggered = True
-with col3:
-    if st.button("❌ Cancel", help="Cancel the current download/conversion process"):
-        st.session_state.cancel_download = True
-
- # Add toggle for MP3 extraction (default ON)
-download_mp3 = st.checkbox("Also extract MP3 audio", value=True)
-
 multi_url_text = st.text_area(
     "Enter YouTube URLs (one per line or separated by commas):",
     value=st.session_state.multi_url_text,
     key="multi_url_text_area",
     height=150
 )
-st.session_state.multi_url_text = multi_url_text       
+st.session_state.multi_url_text = multi_url_text
 
+# Start Download and Cancel buttons
+_, col2, col3, _ = st.columns([4, 2, 2, 4])
+with col2:
+    if st.button("⬇️ Download", help="Start downloading and converting all listed YouTube URLs"):
+        st.session_state.download_triggered = True
+with col3:
+    if st.button("❌ Cancel", help="Cancel the current download/conversion process"):
+        st.session_state.cancel_download = True
+        
+    # Add toggle for MP3 extraction (default ON)
+_, col4, _ = st.columns([3.5,2,3])
+with col4:
+    download_mp3 = st.checkbox("MP3 audio", value=True)
+    
 # ==== PROCESSING & LOGS AT THE BOTTOM ====
 
 progress_bar = st.progress(0)  # progress bar at the top of logs
@@ -215,5 +237,7 @@ if st.session_state.download_triggered:
                     st.warning("⛔ Download cancelled by user.")
                 else:
                     st.error(f"❌ Error: {e}")
+
     # Clear the text area after download or cancel
     st.session_state.multi_url_text = ""
+
