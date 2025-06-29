@@ -32,31 +32,31 @@ st.markdown(
 )
 
 
-# Convert to mp4 using moviepy
+# Convert to mp4 using ffmpeg
+
 def convert_to_mp4(input_path: Path, log_func):
     output_path = input_path.with_suffix(".converted.mp4")
-    log_func(f"🔄 Converting {input_path.name} to MP4 with moviepy...")
+    log_func(f"🔄 Converting {input_path.name} to MP4 with ffmpeg...")
     try:
-        clip = VideoFileClip(str(input_path))
-        clip.write_videofile(str(output_path), codec="libx264", audio_codec="aac", logger=None)
-        clip.close()
+        subprocess.run([
+            'ffmpeg', '-i', str(input_path), '-c:v', 'libx264', '-c:a', 'aac',
+            '-y', str(output_path)
+        ], check=True)
         output_path.replace(input_path)
         log_func(f"✅ Converted: {input_path.name}")
     except Exception as e:
         log_func(f"❌ Conversion failed: {e}")
 
-# Convert to mp3
+# Convert to mp3 using ffmpeg
+
 def convert_to_mp3(input_path: Path, log_func):
     output_path = input_path.with_suffix(".mp3")
-    log_func(f"🎧 Extracting MP3 from {input_path.name}...")
+    log_func(f"🎧 Extracting MP3 from {input_path.name} with ffmpeg...")
     try:
-        clip = VideoFileClip(str(input_path))
-        if clip.audio is not None:
-            clip.audio.write_audiofile(str(output_path), logger=None)
-            log_func(f"✅ MP3 created: {output_path.name}")
-        else:
-            log_func(f"❌ No audio track found in {input_path.name}")
-        clip.close()
+        subprocess.run([
+            'ffmpeg', '-i', str(input_path), '-q:a', '0', '-map', 'a', '-y', str(output_path)
+        ], check=True)
+        log_func(f"✅ MP3 created: {output_path.name}")
     except Exception as e:
         log_func(f"❌ MP3 conversion failed: {e}")
 
