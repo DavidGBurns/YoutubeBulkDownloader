@@ -8,6 +8,7 @@ import os
 import io
 import zipfile
 from datetime import datetime
+import moviepy as mp
 
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
@@ -40,7 +41,7 @@ def convert_to_mp3(input_path: Path, log_func):
         log_func(f"❌ MP3 conversion failed: {e}")
 
 # Download and convert with progress update
-def download_and_process(urls, output_dir: Path, log_func, progress_updater):
+def download_and_process(urls, output_dir: Path, log_func, progress_updater, download_mp3=True):
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio/best[ext=mp4]/best',
         'outtmpl': str(output_dir / '%(title)s.%(ext)s'),
@@ -65,7 +66,8 @@ def download_and_process(urls, output_dir: Path, log_func, progress_updater):
     total_files = len(video_files)
     for i, file in enumerate(video_files, start=1):
         convert_to_mp4(file, log_func)
-        convert_to_mp3(file, log_func)
+        if download_mp3:
+            convert_to_mp3(file, log_func)
         progress_updater(int((0.5 + i / total_files * 0.5) * 100))
 
 # Pirate message
@@ -107,13 +109,7 @@ st.title("🏴‍☠️ YouTube Bulk Downloader")
 if "multi_url_text" not in st.session_state:
     st.session_state.multi_url_text = ""
 
-multi_url_text = st.text_area(
-    "Enter YouTube URLs (one per line or separated by commas):",
-    value=st.session_state.multi_url_text,
-    key="multi_url_text_area",
-    height=150
-)
-st.session_state.multi_url_text = multi_url_text
+
 
 # Start Download and Cancel buttons
 _, col2, col3, _ = st.columns([4, 3, 2, 4])
@@ -123,6 +119,17 @@ with col2:
 with col3:
     if st.button("❌ Cancel", help="Cancel the current download/conversion process"):
         st.session_state.cancel_download = True
+
+ # Add toggle for MP3 extraction (default ON)
+download_mp3 = st.checkbox("Also extract MP3 audio", value=True)
+
+multi_url_text = st.text_area(
+    "Enter YouTube URLs (one per line or separated by commas):",
+    value=st.session_state.multi_url_text,
+    key="multi_url_text_area",
+    height=150
+)
+st.session_state.multi_url_text = multi_url_text       
 
 # ==== PROCESSING & LOGS AT THE BOTTOM ====
 
@@ -136,18 +143,22 @@ def log_func(message):
     logs.append(message)
     log_box_placeholder.markdown(
         f"""
-        <div style='height: 200px; overflow-y: auto; background: #18191A; color: #fafafa; padding: 10px; border-radius: 6px; font-size: 14px; margin-top: 1em;'>
+        <div id='log-box' style='height: 200px; overflow-y: auto; background: #18191A; color: #fafafa; padding: 10px; border-radius: 6px; font-size: 14px; margin-top: 1em;'>
         {'<br>'.join(logs[-100:])}
         </div>
+        <script>
+        var logBox = document.getElementById('log-box');
+        if (logBox) {{ logBox.scrollTop = logBox.scrollHeight; }}
+        </script>
         """,
         unsafe_allow_html=True
     )
 
-def zip_converted_files(folder: Path) -> bytes:
+def zip_converted_files(folder: Path, include_mp3=True) -> bytes:
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
         for file in folder.glob("*.*"):
-            if file.suffix.lower() in [".mp3", ".mp4"]:
+            if file.suffix.lower() == ".mp4" or (include_mp3 and file.suffix.lower() == ".mp3"):
                 zipf.write(file, arcname=file.name)
     zip_buffer.seek(0)
     return zip_buffer.read()
@@ -178,7 +189,7 @@ if st.session_state.download_triggered:
                     raise Exception("Download cancelled by user.")
 
             try:
-                download_and_process(valid_urls, output_dir, log_func, update_progress)
+                download_and_process(valid_urls, output_dir, log_func, update_progress, download_mp3)
                 if st.session_state.cancel_download:
                     st.warning("⛔ Download cancelled.")
                 else:
@@ -189,7 +200,7 @@ if st.session_state.download_triggered:
                     st.success("🏁 All downloads complete!")
 
                     # Zip all converted files
-                    zip_bytes = zip_converted_files(output_dir)
+                    zip_bytes = zip_converted_files(output_dir, download_mp3)
                     dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                     zip_name = f"YT_Booty_{dt_str}.zip"
                     st.write("## Download your booty:")
