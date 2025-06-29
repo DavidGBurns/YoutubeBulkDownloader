@@ -1,3 +1,4 @@
 streamlit
 yt-dlp
 pyttsx3
+ffmpeg

@@ -8,8 +8,6 @@ import os
 import io
 import zipfile
 from datetime import datetime
-import moviepy as mp
-from moviepy import VideoFileClip
 
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
