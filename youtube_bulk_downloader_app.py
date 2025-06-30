@@ -7,6 +7,7 @@ import os
 import io
 import zipfile
 from datetime import datetime
+from moviepy import VideoFileClip
 
 
 # Configure page
@@ -33,17 +34,17 @@ st.markdown(
 # Convert to mp4 using ffmpeg
 
 def convert_to_mp4(input_path: Path, log_func):
+    # Use moviepy to convert to mp4
     output_path = input_path.with_suffix(".converted.mp4")
-    log_func(f"🔄 Converting {input_path.name} to MP4 with ffmpeg...")
+    log_func(f"🔄 Converting {input_path.name} to MP4 with moviepy...")
     try:
-        subprocess.run([
-            'ffmpeg', '-i', str(input_path), '-c:v', 'libx264', '-c:a', 'aac',
-            '-y', str(output_path)
-        ], check=True)
+        with VideoFileClip(str(input_path)) as clip:
+            clip.write_videofile(str(output_path), codec="libx264", audio_codec="aac", threads=2, logger=None)
         output_path.replace(input_path)
         log_func(f"✅ Converted: {input_path.name}")
     except Exception as e:
         log_func(f"❌ Conversion failed: {e}")
+    return
 
 # Convert to mp3 using ffmpeg
 
@@ -80,12 +81,12 @@ def download_and_process(urls, output_dir: Path, log_func, progress_updater, dow
         log_func(f"❌ Download failed: {e}")
         return
 
-    # After all downloads, process files with ffmpeg
+    # After all downloads, process files (skip ffmpeg mp4 conversion)
     VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.avi', '.mov']
     video_files = [f for f in output_dir.glob('*.*') if f.suffix.lower() in VIDEO_EXTENSIONS]
     total_files = len(video_files)
     for i, file in enumerate(video_files, start=1):
-        convert_to_mp4(file, log_func)  # Always convert video after download
+        convert_to_mp4(file, log_func)  # Now just logs skipping
         if download_mp3:
             convert_to_mp3(file, log_func)
         progress_updater(int(50 + (i / total_files) * 50))  # 50-100% for conversion
