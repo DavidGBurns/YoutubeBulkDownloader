@@ -3,3 +3,4 @@ yt-dlp
 pyttsx3
 ffmpeg
 gTTS
+playsound

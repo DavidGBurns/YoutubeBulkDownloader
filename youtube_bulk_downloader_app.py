@@ -12,6 +12,7 @@ from gtts import gTTS
 import tempfile
 import playsound
 
+
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
 
