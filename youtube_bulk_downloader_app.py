@@ -34,30 +34,37 @@ st.markdown(
 # Convert to mp4 using ffmpeg
 
 def convert_to_mp4(input_path: Path, log_func):
-    # Use moviepy to convert to mp4
     output_path = input_path.with_suffix(".converted.mp4")
-    log_func(f"🔄 Converting {input_path.name} to MP4 with moviepy...")
+    log_func(f"[convert_to_mp4] Starting conversion for {input_path} -> {output_path}")
     try:
         with VideoFileClip(str(input_path)) as clip:
+            log_func(f"[convert_to_mp4] Video duration: {clip.duration}s, size: {clip.size}, fps: {clip.fps}")
             clip.write_videofile(str(output_path), codec="libx264", audio_codec="aac", threads=2, logger=None)
         output_path.replace(input_path)
-        log_func(f"✅ Converted: {input_path.name}")
+        log_func(f"[convert_to_mp4] Success: {input_path.name} converted to mp4.")
     except Exception as e:
-        log_func(f"❌ Conversion failed: {e}")
-    return
+        import traceback
+        tb = traceback.format_exc()
+        log_func(f"[convert_to_mp4] ERROR: {e}\nTraceback:\n{tb}")
 
 # Convert to mp3 using ffmpeg
 
 def convert_to_mp3(input_path: Path, log_func):
     output_path = input_path.with_suffix(".mp3")
-    log_func(f"🎧 Extracting MP3 from {input_path.name} with ffmpeg...")
+    log_func(f"[convert_to_mp3] Starting MP3 extraction for {input_path} -> {output_path}")
     try:
-        subprocess.run([
+        result = subprocess.run([
             'ffmpeg', '-i', str(input_path), '-q:a', '0', '-map', 'a', '-y', str(output_path)
-        ], check=True)
-        log_func(f"✅ MP3 created: {output_path.name}")
+        ], check=True, capture_output=True, text=True, timeout=None)
+        log_func(f"[convert_to_mp3] ffmpeg stdout: {result.stdout}")
+        log_func(f"[convert_to_mp3] ffmpeg stderr: {result.stderr}")
+        log_func(f"[convert_to_mp3] Success: MP3 created: {output_path.name}")
+    except subprocess.TimeoutExpired:
+        log_func(f"[convert_to_mp3] WARNING: ffmpeg process timed out but was ignored.")
     except Exception as e:
-        log_func(f"❌ MP3 conversion failed: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        log_func(f"[convert_to_mp3] ERROR: {e}\nTraceback:\n{tb}")
 
 # Download and convert with progress update
 
@@ -69,24 +76,34 @@ def download_and_process(urls, output_dir: Path, log_func, progress_updater, dow
         'quiet': True,
         'noplaylist': True,
     }
-    log_func(f"📁 Downloading to: {output_dir}\n")
+    log_func(f"[download_and_process] Downloading to: {output_dir}")
+    log_func(f"[download_and_process] yt-dlp options: {ydl_opts}")
     # Download all videos first
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             for i, url in enumerate(urls, start=1):
-                log_func(f"⬇️ Downloading: {url}")
-                ydl.download([url])
+                log_func(f"[download_and_process] Downloading: {url}")
+                try:
+                    ydl.download([url])
+                    log_func(f"[download_and_process] Downloaded: {url}")
+                except Exception as e:
+                    import traceback
+                    tb = traceback.format_exc()
+                    log_func(f"[download_and_process] ERROR downloading {url}: {e}\nTraceback:\n{tb}")
                 progress_updater(int((i / len(urls)) * 50))  # 0-50% for download
     except Exception as e:
-        log_func(f"❌ Download failed: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        log_func(f"[download_and_process] FATAL ERROR: {e}\nTraceback:\n{tb}")
         return
 
-    # After all downloads, process files (skip ffmpeg mp4 conversion)
+    # After all downloads, process files
     VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.avi', '.mov']
     video_files = [f for f in output_dir.glob('*.*') if f.suffix.lower() in VIDEO_EXTENSIONS]
+    log_func(f"[download_and_process] Found {len(video_files)} video files for conversion: {[str(f) for f in video_files]}")
     total_files = len(video_files)
     for i, file in enumerate(video_files, start=1):
-        convert_to_mp4(file, log_func)  # Now just logs skipping
+        convert_to_mp4(file, log_func)
         if download_mp3:
             convert_to_mp3(file, log_func)
         progress_updater(int(50 + (i / total_files) * 50))  # 50-100% for conversion
