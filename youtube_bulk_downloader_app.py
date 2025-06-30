@@ -2,15 +2,11 @@ import streamlit as st
 from pathlib import Path
 import subprocess
 import yt_dlp
-import pyttsx3
 import random
 import os
 import io
 import zipfile
 from datetime import datetime
-from gtts import gTTS
-import tempfile
-import playsound
 
 
 # Configure page
@@ -107,17 +103,6 @@ def save_pirate_message(folder: Path, log_func):
         f.write(message)
     log_func(f"📜 Pirate message: {message}")
     return message
-
-# Speak it!
-def text_to_speech(text, log_func):
-    try:
-        tts = gTTS(text)
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
-            tts.save(fp.name)
-            playsound.playsound(fp.name)
-        log_func("🗣️ Spoken message complete.")
-    except Exception as e:
-        log_func(f"❌ TTS failed: {e}")
 
 # SESSION INIT
 if "url_list" not in st.session_state:
@@ -220,7 +205,6 @@ if st.session_state.download_triggered:
                     st.warning("⛔ Download cancelled.")
                 else:
                     pirate_msg = save_pirate_message(output_dir, log_func)
-                    text_to_speech(pirate_msg, log_func)
                     progress_bar.progress(100)
                     st.balloons()
                     st.success("🏁 All downloads complete!")
