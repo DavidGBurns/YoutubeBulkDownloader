@@ -69,25 +69,26 @@ def download_and_process(urls, output_dir: Path, log_func, progress_updater, dow
         'noplaylist': True,
     }
     log_func(f"📁 Downloading to: {output_dir}\n")
+    # Download all videos first
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             for i, url in enumerate(urls, start=1):
                 log_func(f"⬇️ Downloading: {url}")
                 ydl.download([url])
-                progress_updater(int((i - 0.5) / len(urls) * 100))
+                progress_updater(int((i / len(urls)) * 50))  # 0-50% for download
     except Exception as e:
         log_func(f"❌ Download failed: {e}")
         return
 
-    # After download, process files with ffmpeg if needed
+    # After all downloads, process files with ffmpeg
     VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.avi', '.mov']
     video_files = [f for f in output_dir.glob('*.*') if f.suffix.lower() in VIDEO_EXTENSIONS]
     total_files = len(video_files)
     for i, file in enumerate(video_files, start=1):
-        convert_to_mp4(file, log_func)  # Always convert video after download
+        convert_to_mp4(file, log_func)  # Always convert video after all downloads
         if download_mp3:
             convert_to_mp3(file, log_func)
-        progress_updater(int((0.5 + i / total_files * 0.5) * 100))
+        progress_updater(int(50 + (i / total_files) * 50))  # 50-100% for conversion
 
 # Pirate message
 def save_pirate_message(folder: Path, log_func):
