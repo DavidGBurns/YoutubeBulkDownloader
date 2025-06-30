@@ -8,6 +8,7 @@ import io
 import zipfile
 from datetime import datetime
 from moviepy import VideoFileClip
+import shutil
 
 
 # Configure page
@@ -192,41 +193,50 @@ if st.session_state.download_triggered:
         progress_bar.progress(0)  # reset progress
     else:
         import tempfile
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            output_dir = Path(tmpdirname)
-            output_dir.mkdir(parents=True, exist_ok=True)
+        tmpdirname = None
+        try:
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                output_dir = Path(tmpdirname)
+                output_dir.mkdir(parents=True, exist_ok=True)
 
-            def update_progress(percent):
-                progress_bar.progress(percent)
-                if st.session_state.cancel_download:
-                    raise Exception("Download cancelled by user.")
+                def update_progress(percent):
+                    progress_bar.progress(percent)
+                    if st.session_state.cancel_download:
+                        raise Exception("Download cancelled by user.")
 
-            try:
-                download_and_process(valid_urls, output_dir, log_func, update_progress, download_mp3)
-                if st.session_state.cancel_download:
-                    st.warning("⛔ Download cancelled.")
-                else:
-                    pirate_msg = save_pirate_message(output_dir, log_func)
-                    progress_bar.progress(100)
-                    st.balloons()
-                    st.success("🏁 All downloads complete!")
+                try:
+                    download_and_process(valid_urls, output_dir, log_func, update_progress, download_mp3)
+                    if st.session_state.cancel_download:
+                        st.warning("⛔ Download cancelled.")
+                    else:
+                        pirate_msg = save_pirate_message(output_dir, log_func)
+                        progress_bar.progress(100)
+                        st.balloons()
+                        st.success("🏁 All downloads complete!")
 
-                    # Zip all converted files
-                    zip_bytes = zip_converted_files(output_dir, download_mp3)
-                    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    zip_name = f"YT_Booty_{dt_str}.zip"
-                    st.write("## Download your booty:")
-                    st.download_button(
-                        label=f"💾 Download {zip_name}",
-                        data=zip_bytes,
-                        file_name=zip_name,
-                        mime="application/zip"
-                    )
-            except Exception as e:
-                if str(e) == "Download cancelled by user.":
-                    st.warning("⛔ Download cancelled by user.")
-                else:
-                    st.error(f"❌ Error: {e}")
+                        # Zip all converted files
+                        zip_bytes = zip_converted_files(output_dir, download_mp3)
+                        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        zip_name = f"YT_Booty_{dt_str}.zip"
+                        st.write("## Download your booty:")
+                        st.download_button(
+                            label=f"💾 Download {zip_name}",
+                            data=zip_bytes,
+                            file_name=zip_name,
+                            mime="application/zip"
+                        )
+                except Exception as e:
+                    if str(e) == "Download cancelled by user.":
+                        st.warning("⛔ Download cancelled by user.")
+                    else:
+                        st.error(f"❌ Error: {e}")
+        finally:
+            # Clean up temp directory if it exists and is not already deleted
+            if tmpdirname and os.path.exists(tmpdirname):
+                try:
+                    shutil.rmtree(tmpdirname)
+                except Exception as cleanup_err:
+                    log_func(f"[cleanup] Failed to delete temp dir {tmpdirname}: {cleanup_err}")
 
     # Clear the text area after download or cancel
     st.session_state.multi_url_text = ""
