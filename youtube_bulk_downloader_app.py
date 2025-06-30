@@ -2,14 +2,12 @@ import streamlit as st
 from pathlib import Path
 import subprocess
 import yt_dlp
+import pyttsx3
 import random
 import os
 import io
 import zipfile
 from datetime import datetime
-from moviepy import VideoFileClip
-import shutil
-
 
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
@@ -35,17 +33,17 @@ st.markdown(
 # Convert to mp4 using ffmpeg
 
 def convert_to_mp4(input_path: Path, log_func):
-    # Use moviepy to convert to mp4
     output_path = input_path.with_suffix(".converted.mp4")
-    log_func(f"🔄 Converting {input_path.name} to MP4 with moviepy...")
+    log_func(f"🔄 Converting {input_path.name} to MP4 with ffmpeg...")
     try:
-        with VideoFileClip(str(input_path)) as clip:
-            clip.write_videofile(str(output_path), codec="libx264", audio_codec="aac", threads=2, logger=None)
+        subprocess.run([
+            'ffmpeg', '-i', str(input_path), '-c:v', 'libx264', '-c:a', 'aac',
+            '-y', str(output_path)
+        ], check=True)
         output_path.replace(input_path)
         log_func(f"✅ Converted: {input_path.name}")
     except Exception as e:
         log_func(f"❌ Conversion failed: {e}")
-    return
 
 # Convert to mp3 using ffmpeg
 
@@ -71,26 +69,25 @@ def download_and_process(urls, output_dir: Path, log_func, progress_updater, dow
         'noplaylist': True,
     }
     log_func(f"📁 Downloading to: {output_dir}\n")
-    # Download all videos first
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             for i, url in enumerate(urls, start=1):
                 log_func(f"⬇️ Downloading: {url}")
                 ydl.download([url])
-                progress_updater(int((i / len(urls)) * 50))  # 0-50% for download
+                progress_updater(int((i - 0.5) / len(urls) * 100))
     except Exception as e:
         log_func(f"❌ Download failed: {e}")
         return
 
-    # After all downloads, process files (skip ffmpeg mp4 conversion)
+    # After download, process files with ffmpeg if needed
     VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.avi', '.mov']
     video_files = [f for f in output_dir.glob('*.*') if f.suffix.lower() in VIDEO_EXTENSIONS]
     total_files = len(video_files)
     for i, file in enumerate(video_files, start=1):
-        convert_to_mp4(file, log_func)  # Now just logs skipping
+        convert_to_mp4(file, log_func)  # Always convert video after download
         if download_mp3:
             convert_to_mp3(file, log_func)
-        progress_updater(int(50 + (i / total_files) * 50))  # 50-100% for conversion
+        progress_updater(int((0.5 + i / total_files * 0.5) * 100))
 
 # Pirate message
 def save_pirate_message(folder: Path, log_func):
@@ -106,6 +103,16 @@ def save_pirate_message(folder: Path, log_func):
         f.write(message)
     log_func(f"📜 Pirate message: {message}")
     return message
+
+# Speak it!
+def text_to_speech(text, log_func):
+    try:
+        engine = pyttsx3.init()
+        engine.say(text)
+        engine.runAndWait()
+        log_func("🗣️ Spoken message complete.")
+    except Exception as e:
+        log_func(f"❌ TTS failed: {e}")
 
 # SESSION INIT
 if "url_list" not in st.session_state:
@@ -193,50 +200,42 @@ if st.session_state.download_triggered:
         progress_bar.progress(0)  # reset progress
     else:
         import tempfile
-        tmpdirname = None
-        try:
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                output_dir = Path(tmpdirname)
-                output_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            output_dir = Path(tmpdirname)
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-                def update_progress(percent):
-                    progress_bar.progress(percent)
-                    if st.session_state.cancel_download:
-                        raise Exception("Download cancelled by user.")
+            def update_progress(percent):
+                progress_bar.progress(percent)
+                if st.session_state.cancel_download:
+                    raise Exception("Download cancelled by user.")
 
-                try:
-                    download_and_process(valid_urls, output_dir, log_func, update_progress, download_mp3)
-                    if st.session_state.cancel_download:
-                        st.warning("⛔ Download cancelled.")
-                    else:
-                        pirate_msg = save_pirate_message(output_dir, log_func)
-                        progress_bar.progress(100)
-                        st.balloons()
-                        st.success("🏁 All downloads complete!")
+            try:
+                download_and_process(valid_urls, output_dir, log_func, update_progress, download_mp3)
+                if st.session_state.cancel_download:
+                    st.warning("⛔ Download cancelled.")
+                else:
+                    pirate_msg = save_pirate_message(output_dir, log_func)
+                    text_to_speech(pirate_msg, log_func)
+                    progress_bar.progress(100)
+                    st.balloons()
+                    st.success("🏁 All downloads complete!")
 
-                        # Zip all converted files
-                        zip_bytes = zip_converted_files(output_dir, download_mp3)
-                        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        zip_name = f"YT_Booty_{dt_str}.zip"
-                        st.write("## Download your booty:")
-                        st.download_button(
-                            label=f"💾 Download {zip_name}",
-                            data=zip_bytes,
-                            file_name=zip_name,
-                            mime="application/zip"
-                        )
-                except Exception as e:
-                    if str(e) == "Download cancelled by user.":
-                        st.warning("⛔ Download cancelled by user.")
-                    else:
-                        st.error(f"❌ Error: {e}")
-        finally:
-            # Clean up temp directory if it exists and is not already deleted
-            if tmpdirname and os.path.exists(tmpdirname):
-                try:
-                    shutil.rmtree(tmpdirname)
-                except Exception as cleanup_err:
-                    log_func(f"[cleanup] Failed to delete temp dir {tmpdirname}: {cleanup_err}")
+                    # Zip all converted files
+                    zip_bytes = zip_converted_files(output_dir, download_mp3)
+                    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    zip_name = f"YT_Booty_{dt_str}.zip"
+                    st.write("## Download your booty:")
+                    st.download_button(
+                        label=f"💾 Download {zip_name}",
+                        data=zip_bytes,
+                        file_name=zip_name,
+                        mime="application/zip"
+                    )
+            except Exception as e:
+                if str(e) == "Download cancelled by user.":
+                    st.warning("⛔ Download cancelled by user.")
+                else:
+                    st.error(f"❌ Error: {e}")
 
     # Clear the text area after download or cancel
     st.session_state.multi_url_text = ""
