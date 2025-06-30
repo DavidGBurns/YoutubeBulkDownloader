@@ -8,6 +8,9 @@ import os
 import io
 import zipfile
 from datetime import datetime
+from gtts import gTTS
+import tempfile
+import playsound
 
 # Configure page
 st.set_page_config(page_title="🏴‍☠️ YouTube Bulk Downloader", layout="centered")
@@ -107,9 +110,10 @@ def save_pirate_message(folder: Path, log_func):
 # Speak it!
 def text_to_speech(text, log_func):
     try:
-        engine = pyttsx3.init()
-        engine.say(text)
-        engine.runAndWait()
+        tts = gTTS(text)
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
+            tts.save(fp.name)
+            playsound.playsound(fp.name)
         log_func("🗣️ Spoken message complete.")
     except Exception as e:
         log_func(f"❌ TTS failed: {e}")
