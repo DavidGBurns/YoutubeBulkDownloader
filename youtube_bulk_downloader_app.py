@@ -85,7 +85,7 @@ def download_and_process(urls, output_dir: Path, log_func, progress_updater, dow
     video_files = [f for f in output_dir.glob('*.*') if f.suffix.lower() in VIDEO_EXTENSIONS]
     total_files = len(video_files)
     for i, file in enumerate(video_files, start=1):
-        convert_to_mp4(file, log_func)  # Always convert video after all downloads
+        convert_to_mp4(file, log_func)  # Always convert video after download
         if download_mp3:
             convert_to_mp3(file, log_func)
         progress_updater(int(50 + (i / total_files) * 50))  # 50-100% for conversion
